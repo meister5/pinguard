@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "pinguard"
+version = "0.1.0"
+description = "Check GPIO pin assignments against a board profile before they reach hardware, then generate the constants your firmware includes."
+readme = "README.md"
+requires-python = ">=3.10"
+license = { text = "MIT" }
+authors = [{ name = "Eren Altuntas" }]
+keywords = ["gpio", "embedded", "esp32", "raspberry-pi", "firmware", "pinout"]
+classifiers = [
+    "Development Status :: 4 - Beta",
+    "Intended Audience :: Developers",
+    "License :: OSI Approved :: MIT License",
+    "Programming Language :: Python :: 3.10",
+    "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
+    "Programming Language :: Python :: 3.13",
+    "Topic :: Software Development :: Embedded Systems",
+    "Topic :: Software Development :: Libraries",
+]
+dependencies = []
+
+[project.optional-dependencies]
+dev = ["pytest>=7", "ruff>=0.4"]
+
+[project.scripts]
+pinguard = "pinguard.cli:main"
+
+[project.urls]
+Homepage = "https://github.com/meister5/pinguard"
+Issues = "https://github.com/meister5/pinguard/issues"
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py310"
+src = ["src", "tests", "examples"]
+# Code blocks in the README are hand-aligned for reading; recent ruff versions
+# format markdown too, and that alignment is not worth a red CI badge.
+extend-exclude = ["*.md"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
+ignore = ["E501", "B008"]
+
+[tool.ruff.lint.per-file-ignores]
+# Both put the src/ directory on sys.path before importing the package.
+"tests/conftest.py" = ["E402"]
+"examples/*" = ["E402"]
