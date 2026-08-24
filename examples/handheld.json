@@ -1,0 +1,21 @@
+{
+  "name": "handheld",
+  "display_name": "ESP32 handheld",
+  "description": "Example overlay: a hand-built ESP32 handheld with an SPI display, a microSD slot and two buttons",
+  "base": "esp32",
+  "reserve": {
+    "18": { "owner": "display", "reason": "ST7789 SCLK" },
+    "23": { "owner": "display", "reason": "ST7789 MOSI" },
+    "16": { "owner": "display", "reason": "ST7789 DC" },
+    "17": { "owner": "display", "reason": "ST7789 CS" },
+    "4":  { "owner": "display", "reason": "ST7789 reset" },
+    "19": { "owner": "sdcard", "reason": "shared SPI MISO" },
+    "5":  { "owner": "sdcard", "reason": "card select" },
+    "1":  { "owner": "console", "reason": "USB serial TX" },
+    "3":  { "owner": "console", "reason": "USB serial RX" }
+  },
+  "caveats": {
+    "shared-spi": "the display and the SD card share SCLK and MOSI; only the chip selects are separate, so both drivers must agree on the bus speed",
+    "module-variant": "GPIO16 and GPIO17 are only free because this board carries a WROOM module; on a WROVER they belong to the PSRAM and the display would have to move"
+  }
+}
