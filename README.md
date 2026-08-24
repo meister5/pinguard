@@ -168,6 +168,14 @@ Every subcommand takes `--overlay board.json`.
 
 ## Install
 
+Not on PyPI yet — install from the repository:
+
+```console
+$ pip install git+https://github.com/meister5/pinguard
+```
+
+Or clone it and work on it:
+
 ```console
 $ pip install -e '.[dev]'
 $ pytest -q
