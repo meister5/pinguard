@@ -1,0 +1,49 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: ${{ matrix.python-version }}
+      - run: pip install -e '.[dev]'
+      - run: pytest -q
+
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install ruff
+      - run: ruff check .
+      - run: ruff format --check .
+
+  generated-header-compiles:
+    # The whole point of the exporter is that firmware includes its output, so
+    # the header it generates has to survive a real compiler.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+      - run: pip install -e .
+      - run: python examples/build_pin_map.py board_pins.h
+      - name: Compile a translation unit that includes it
+        run: |
+          printf '#include "board_pins.h"\nint main() { return pins::PIN_STATUS_LED; }\n' > check.cpp
+          g++ -std=c++17 -Wall -Wextra -Werror -o check check.cpp
+      - run: pinguard check board_pins.json --profile esp32 --overlay examples/handheld.json
