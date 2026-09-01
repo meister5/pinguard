@@ -4,15 +4,16 @@
 [![Python](https://img.shields.io/badge/python-3.10%20%E2%80%93%203.13-blue)](pyproject.toml)
 [![License](https://img.shields.io/badge/license-MIT-green)](LICENSE)
 
-GPIO mistakes do not raise. That is the whole problem.
+GPIO mistakes do not raise.
 
 Configure an ESP32 GPIO34 as an output and `gpio_set_level()` returns `ESP_OK` forever while the
-pin never moves — it has no output driver. Drive GPIO6 and you are fighting the SPI flash for the
-bus your instructions are fetched over. Let two libraries claim the same pin and you get a sensor
-that reads garbage on Tuesdays. Pull GPIO12 high at reset on a 3.3V module and the board simply
-stops booting. None of these produce an error message; they produce an afternoon.
+pin never moves, because it has no output driver. Drive GPIO6 and you are fighting the SPI flash
+for the bus your instructions are fetched over. Let two libraries claim the same pin and you get
+a sensor that reads garbage intermittently. Pull GPIO12 high at reset on a 3.3V module and the
+board stops booting. None of these produce an error message, so all of them cost debugging time
+instead.
 
-pinguard moves the check to where an error is still cheap:
+pinguard moves the check to where it is still cheap:
 
 ```python
 from pinguard import PinRegistry, load_profile
@@ -25,8 +26,8 @@ registry.claim(34, "relay", requires=["output"])
 # CapabilityUnavailable: GPIO34 does not support output; it supports adc, input, interrupt
 ```
 
-No dependencies, no hardware, no `import machine`. It is a data structure and some rules, so it
-runs in CI on a laptop.
+No dependencies and no `import machine`. It is a data structure and a set of rules, so it runs
+in CI on a laptop.
 
 ## What it checks
 
@@ -35,14 +36,15 @@ Three separate questions, in order, on every claim:
 1. **Does the pin exist?** The ESP32 has no GPIO20 or GPIO24. A Raspberry Pi header stops at
    GPIO27. Asking for one gets you `UnknownPin`, not a silent no-op.
 2. **Has the board already spent it?** Flash, PSRAM, the HAT ID EEPROM, the display bus your
-   overlay describes — `PinReserved`, with the reason attached.
+   overlay describes. You get `PinReserved`, with the reason attached.
 3. **Can the pin do the job?** Output on an input-only pin, SPI on a Pi pin whose alternate
    functions do not include it, PWM on one of the twenty-four Pi pins that do not reach the PWM
-   block — `CapabilityUnavailable`, listing what the pin *can* do.
+   block. You get `CapabilityUnavailable`, listing what the pin *can* do.
 
 Everything else is an **advisory**: recorded, reported, never raised. Strapping pins, ADC2 being
 unreadable while Wi-Fi is up, GPIO14/15 carrying the serial console. Those are legitimate choices
-that need to be deliberate ones, and a library that refuses them is a library people work around.
+that should be deliberate, and refusing them outright would only make the library something to
+work around.
 
 ```
 >>> registry.claim(12, "moisture", requires=["adc"])
@@ -53,14 +55,14 @@ that need to be deliberate ones, and a library that refuses them is a library pe
  'limitation, not a driver one')
 ```
 
-## Chips and boards are different things
+## Chip profiles and board overlays
 
-A chip profile is a published fact: which pins exist, which belong to the flash, which ADC unit
-each one is on. It ships with the library and does not change.
+A chip profile is published and fixed: which pins exist, which belong to the flash, which ADC
+unit each one is on. It ships with the library and does not change.
 
-What a *board* did with those pins is not a published fact — it is a schematic that gets revised.
-So board wiring is an **overlay**: plain JSON, layered on top of a chip profile, editable by
-whoever owns the board without touching library code or waiting for a release.
+What a *board* did with those pins is a schematic, and schematics get revised, so board wiring
+is an **overlay**: plain JSON, layered on top of a chip profile, editable by whoever owns the
+board without touching library code or waiting for a release.
 
 ```json
 {
@@ -83,9 +85,9 @@ profile = load_profile("esp32").apply(Overlay.load("handheld.json"))
 
 Built-in profiles: `esp32`, `esp32s3`, `raspberry-pi-5`. They cover the pin counts, the
 input-only pins, the flash and PSRAM reservations, the strapping pins and what each one does at
-reset, the ADC1/ADC2 split, the DAC pins, the touch pads, and — on the Pi, where peripherals are
-not routable — exactly which pins each bus is available on. Pi pins also carry their physical
-header position, because every wiring mistake starts with reading one numbering as the other.
+reset, the ADC1/ADC2 split, the DAC pins, the touch pads, and, on the Pi where peripherals are not
+routable, exactly which pins each bus is available on. Pi pins also carry their physical header
+position, since mixing up the two numbering schemes is a common wiring mistake.
 
 ## Buses claim all at once or not at all
 
@@ -94,9 +96,9 @@ registry.claim_bus("spi", "display", sck=18, mosi=23, miso=19, cs=5)
 ```
 
 Each line is claimed with the bus capability required. If any one of them fails, the ones already
-taken are released — a half-claimed SPI bus is a worse state to be in than a rejected one.
+taken are released, since a half-claimed SPI bus is worse than a rejected one.
 
-## Then generate the constants
+## Generating the constants
 
 The registry that refused the bad assignments is the thing that writes the header, so the checks
 and the firmware cannot disagree:
@@ -136,10 +138,10 @@ pin map. CI compiles the generated header with `-Wall -Wextra -Werror` on every 
 `--format python` emits the same constants for the MicroPython half of a project;
 `--format markdown` emits a table for a README.
 
-## Saving a map, and getting the same board back
+## Saving and restoring a pin map
 
-`pinguard.persistence` writes the assignments as JSON with the profile's **fingerprint** — a hash
-of the pin layout — alongside them. Restoring re-runs every claim through the same checks, and a
+`pinguard.persistence` writes the assignments as JSON with the profile's **fingerprint**, a hash of
+the pin layout, alongside them. Restoring re-runs every claim through the same checks, and a
 map saved against a board whose pins have since moved is refused rather than trusted:
 
 ```console
@@ -161,14 +163,13 @@ $ pinguard export pins.json -f cpp -o board_pins.h   # generate
 ```
 
 `suggest` orders its answers rather than counting upwards: plain pins first, then pins carrying a
-caveat, then strapping pins last. The first suggestion is the one least likely to cost you an
-afternoon.
+caveat, then strapping pins last, so the first suggestion is the safest one.
 
 Every subcommand takes `--overlay board.json`.
 
 ## Install
 
-Not on PyPI yet — install from the repository:
+Not on PyPI yet, so install from the repository:
 
 ```console
 $ pip install git+https://github.com/meister5/pinguard
@@ -211,8 +212,8 @@ relay moved to GPIO32, which can actually drive it
 | `src/pinguard/cli.py` | the `pinguard` command |
 
 Adding a chip is one module in `profiles/` that returns a `BoardProfile`. The profile test suite
-is parametrised over every registered profile, so a new one inherits the invariants — every pin
-readable, every caveat code defined, every reservation explaining itself — without writing a
+is parametrised over every registered profile, so a new one inherits the invariants (every pin
+readable, every caveat code defined, every reservation explaining itself) without writing a
 single new test.
 
 ## License
