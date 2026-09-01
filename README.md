@@ -10,10 +10,10 @@ Configure an ESP32 GPIO34 as an output and `gpio_set_level()` returns `ESP_OK` f
 pin never moves, because it has no output driver. Drive GPIO6 and you are fighting the SPI flash
 for the bus your instructions are fetched over. Let two libraries claim the same pin and you get
 a sensor that reads garbage intermittently. Pull GPIO12 high at reset on a 3.3V module and the
-board stops booting. None of these produce an error message, so all of them cost debugging time
-instead.
+board stops booting. None of these produce an error message, and each one has cost me an
+afternoon.
 
-pinguard moves the check to where it is still cheap:
+I wrote pinguard to move the check to where it is still cheap:
 
 ```python
 from pinguard import PinRegistry, load_profile
@@ -31,7 +31,7 @@ in CI on a laptop.
 
 ## What it checks
 
-Three separate questions, in order, on every claim:
+I ask three questions, in order, on every claim:
 
 1. **Does the pin exist?** The ESP32 has no GPIO20 or GPIO24. A Raspberry Pi header stops at
    GPIO27. Asking for one gets you `UnknownPin`, not a silent no-op.
@@ -41,10 +41,10 @@ Three separate questions, in order, on every claim:
    functions do not include it, PWM on one of the twenty-four Pi pins that do not reach the PWM
    block. You get `CapabilityUnavailable`, listing what the pin *can* do.
 
-Everything else is an **advisory**: recorded, reported, never raised. Strapping pins, ADC2 being
+Everything else I record as an **advisory**: reported, never raised. Strapping pins, ADC2 being
 unreadable while Wi-Fi is up, GPIO14/15 carrying the serial console. Those are legitimate choices
-that should be deliberate, and refusing them outright would only make the library something to
-work around.
+that should be deliberate, and if I refused them outright the library would just be something
+people work around.
 
 ```
 >>> registry.claim(12, "moisture", requires=["adc"])
@@ -87,7 +87,8 @@ Built-in profiles: `esp32`, `esp32s3`, `raspberry-pi-5`. They cover the pin coun
 input-only pins, the flash and PSRAM reservations, the strapping pins and what each one does at
 reset, the ADC1/ADC2 split, the DAC pins, the touch pads, and, on the Pi where peripherals are not
 routable, exactly which pins each bus is available on. Pi pins also carry their physical header
-position, since mixing up the two numbering schemes is a common wiring mistake.
+position, since mixing up the two numbering schemes is the first mistake everyone makes, me
+included.
 
 ## Buses claim all at once or not at all
 
@@ -95,8 +96,8 @@ position, since mixing up the two numbering schemes is a common wiring mistake.
 registry.claim_bus("spi", "display", sck=18, mosi=23, miso=19, cs=5)
 ```
 
-Each line is claimed with the bus capability required. If any one of them fails, the ones already
-taken are released, since a half-claimed SPI bus is worse than a rejected one.
+Each line is claimed with the bus capability required. If any one of them fails, I release the ones already
+taken, since a half-claimed SPI bus is worse than a rejected one.
 
 ## Generating the constants
 
@@ -131,9 +132,9 @@ static_assert(PIN_STATUS_LED != PIN_SENSOR_SDA, "PIN_STATUS_LED and PIN_SENSOR_S
 }  // namespace pins
 ```
 
-`constexpr int` rather than macros, so the values keep a type and respect the namespace. The
-static asserts exist to catch the case where someone hand-edits the generated file instead of the
-pin map. CI compiles the generated header with `-Wall -Wextra -Werror` on every push.
+I emit `constexpr int` rather than macros, so the values keep a type and respect the namespace.
+The static asserts are there to catch someone hand-editing the generated file instead of the pin
+map. CI compiles the generated header with `-Wall -Wextra -Werror` on every push.
 
 `--format python` emits the same constants for the MicroPython half of a project;
 `--format markdown` emits a table for a README.
